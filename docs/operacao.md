@@ -4,6 +4,8 @@
 
 API apenas em `127.0.0.1:8000`; Vite em `127.0.0.1:5173` com proxy `/api`, preservando mesma origem e proteção CSRF. Banco local `backend/db.sqlite3` ignorado pelo Git. `.venv`, builds, logs, arquivos privados e resultados transitórios também ignorados.
 
+Os testes PostgreSQL usam cluster/base exclusivos e portas 55432/8011/5175, conforme [testes e isolamento](testing.md). Cada rodada cria outro banco; E2E nunca reutiliza os servidores normais. O runtime portátil pode ser parado com `scripts/postgres-local.py stop`; dados sintéticos e logs permanecem para inspeção, fora do Git. Não iniciar runtime portátil e Compose de testes juntos na mesma porta.
+
 ## Produção pendente
 
 Configurar PostgreSQL, segredo novo em `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS`, proxy HTTPS e servidor WSGI. Django impede produção sem segredo ou configuração PostgreSQL. O proxy serve `frontend/dist`, encaminha `/api` ao WSGI e nunca serve diretórios privados. Não há deploy automático neste projeto.

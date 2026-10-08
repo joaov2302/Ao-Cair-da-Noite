@@ -3,20 +3,17 @@ on: [push, pull_request]
 jobs:
   backend:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env: {POSTGRES_DB: acdn, POSTGRES_USER: acdn, POSTGRES_PASSWORD: ci-only-password}
-        ports: ['5432:5432']
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-    env: {POSTGRES_DB: acdn, POSTGRES_USER: acdn, POSTGRES_PASSWORD: ci-only-password}
+    env: {POSTGRES_USER: acdn_test, POSTGRES_HOST: 127.0.0.1, POSTGRES_PORT: '55432'}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.13'}
       - run: pip install -r backend/requirements.txt
-      - run: python backend/manage.py makemigrations --check --dry-run
-      - run: python backend/manage.py test core
+      - uses: ./.github/actions/postgres-test
+      - run: python scripts/test_env.py api
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: backend-postgresql, path: test-results/}
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -30,6 +27,7 @@ jobs:
       - run: npm test
   e2e:
     runs-on: ubuntu-latest
+    env: {POSTGRES_USER: acdn_test, POSTGRES_HOST: 127.0.0.1, POSTGRES_PORT: '55432'}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,7 +36,10 @@ jobs:
         with: {node-version: '24'}
       - run: python -m venv .venv
       - run: .venv/bin/python -m pip install -r backend/requirements.txt
-      - run: .venv/bin/python backend/manage.py migrate
+      - uses: ./.github/actions/postgres-test
       - run: npm ci --prefix frontend
       - run: npx --prefix frontend playwright install --with-deps chromium
       - run: npm run test:e2e --prefix frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: e2e-postgresql, path: test-results/}

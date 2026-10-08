@@ -5,7 +5,7 @@ from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import JsonResponse, FileResponse
 from django.shortcuts import get_object_or_404
@@ -63,7 +63,14 @@ def auth(request, action):
             if get_user_model().objects.filter(username=username).exists():
                 return JsonResponse({'detail': 'Nome de usuário indisponível.'}, status=400)
             user.set_password(password)
-            user.save()
+            try:
+                with transaction.atomic():
+                    user.save()
+            except IntegrityError:
+                # A segunda inscrição pode ultrapassar o exists() antes do commit.
+                if get_user_model().objects.filter(username=username).exists():
+                    return JsonResponse({'detail': 'Nome de usuário indisponível.'}, status=400)
+                raise
         elif action == 'login':
             user = authenticate(request, username=username, password=password)
             if user is None:
@@ -80,10 +87,13 @@ def accessible_campaigns(user):
     return Campaign.objects.filter(Q(master=user) | Q(membership__user=user)).distinct()
 
 
-def campaign_for(user, pk, master=False):
+def campaign_for(user, pk, master=False, lock=False):
     if type(pk) is not int or pk <= 0:
         raise NotFound('Campanha não encontrada.')
     campaign = get_object_or_404(accessible_campaigns(user), pk=pk)
+    if lock:
+        # Evita FOR UPDATE no DISTINCT do filtro de permissões.
+        campaign = get_object_or_404(Campaign.objects.select_for_update(), pk=campaign.pk)
     if master and campaign.master_id != user.id:
         raise PermissionDenied('Somente o mestre desta campanha.')
     return campaign
@@ -95,11 +105,13 @@ def character_for(user, pk, owner=False, lock=False):
     except (ValueError, TypeError, AttributeError):
         raise NotFound('Ficha não encontrada.')
     query = Character.objects.filter(campaign__in=accessible_campaigns(user)).filter(Q(owner=user) | Q(campaign__master=user))
-    if lock:
-        query = query.select_for_update()
     character = get_object_or_404(query, pk=pk)
     if owner and character.owner_id != user.id:
         raise PermissionDenied('Somente o dono pode editar a ficha.')
+    if lock:
+        # Ordem única: campanha -> ficha. Decisões globais usam a mesma campanha.
+        campaign_for(user, character.campaign_id, lock=True)
+        character = get_object_or_404(query.select_for_update(of=('self',)), pk=pk)
     return character
 
 
@@ -181,11 +193,12 @@ def join(request):
 
 
 @api_view(['GET', 'POST'])
+@transaction.atomic
 def characters(request):
     if request.method == 'GET':
         return Response([summary(c) for c in Character.objects.filter(campaign__in=accessible_campaigns(request.user)).filter(
             Q(owner=request.user) | Q(campaign__master=request.user)).order_by('-updated_at')])
-    campaign = campaign_for(request.user, request.data.get('campaignId'))
+    campaign = campaign_for(request.user, request.data.get('campaignId'), lock=True)
     serializer = CharacterDataSerializer(data=request.data.get('data', {}))
     serializer.is_valid(raise_exception=True)
     validate_asset(campaign, serializer.validated_data)
@@ -290,7 +303,7 @@ def reviews(request, pk):
 @api_view(['POST'])
 @transaction.atomic
 def decision(request, pk):
-    campaign = campaign_for(request.user, pk, master=True)
+    campaign = campaign_for(request.user, pk, master=True, lock=True)
     rule_id, value, reason = request.data.get('ruleId'), request.data.get('value'), request.data.get('reason')
     character_id = request.data.get('characterId')
     if rule_id not in ('R03', 'R06', 'R08', 'R09', 'RACE', 'TECHNIQUES', 'ATIRADOR') or not isinstance(value, dict) or not isinstance(reason, str) or not reason.strip() or len(reason) > 4000 or len(json.dumps(value)) > 8000:

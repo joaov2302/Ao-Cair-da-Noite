@@ -50,7 +50,24 @@ npx.cmd playwright install chromium
 npm.cmd run test:e2e
 ```
 
-Playwright inicia os servidores locais quando necessário e cria usuários e campanhas **sintéticos** para verificar o percurso. As decisões dos testes não são decisões da mesa real. Suítes de backend usam banco temporário.
+Os comandos Django acima verificam SQLite quando não há configuração PostgreSQL; sete testes concorrentes são pulados nesse modo. Para evidência completa e E2E, inicie o PostgreSQL exclusivo de testes:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\postgres-local.py start
+.\.venv\Scripts\python.exe scripts\test_env.py api
+npm.cmd run test:e2e --prefix frontend
+.\.venv\Scripts\python.exe scripts\postgres-local.py stop
+```
+
+O runtime portátil do Windows fica em `.local-test/`, com senha aleatória, sem serviço do Windows e sem migrar o SQLite da mesa. Cada rodada cria um banco PostgreSQL novo. Playwright usa portas **8011/5175**, recusa servidores preexistentes e registra somente usuários e campanhas **sintéticos**. As decisões dos testes não são decisões da mesa real.
+
+Com Vite aberto, reproduza instalação, build, testes e E2E numa cópia do frontend, evitando módulos bloqueados pelo Windows:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\frontend-checks.py --e2e
+```
+
+O PostgreSQL deve estar iniciado e o Chromium instalado. Consulte [testes e isolamento](docs/testing.md) para a alternativa com Docker e localização das evidências.
 
 ## Regras e limites
 
@@ -75,4 +92,4 @@ $env:POSTGRES_HOST = '127.0.0.1'
 .\.venv\Scripts\python.exe backend\manage.py migrate
 ```
 
-As variáveis de `.env.example` devem ser exportadas no terminal: esse arquivo não é carregado automaticamente. Para produção, configure também chave secreta, hosts e HTTPS. [Operação e publicação](docs/operacao.md) registra os gates ainda pendentes. O pipeline inclui PostgreSQL, mas precisa ser executado no GitHub antes de afirmar que esse banco passou nos checks.
+Este Compose é o banco da aplicação; para testes use o runtime acima ou `deploy/compose.test.yml`. As variáveis de `.env.example` devem ser exportadas no terminal: esse arquivo não é carregado automaticamente. Para produção, configure também chave secreta, hosts e HTTPS. [Operação e publicação](docs/operacao.md) registra os gates ainda pendentes. PostgreSQL 17.11 passou localmente na rodada 01; API e E2E estão preparados para PostgreSQL no CI, cuja execução remota continua pendente.

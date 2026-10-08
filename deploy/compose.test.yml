@@ -1,0 +1,19 @@
+name: acdn-tests
+services:
+  postgres-test:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: acdn_test
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina a senha exclusiva de testes}
+    ports:
+      - '127.0.0.1:55432:5432'
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U acdn_test -d postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  postgres_test_data:

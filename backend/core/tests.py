@@ -1,11 +1,12 @@
 from copy import deepcopy
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, Client
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.test import APIClient
-from .models import Campaign, Membership, RulesetVersion, Character, Submission, Review, RuleDecision, Invite, Asset
+from .models import Campaign, Membership, RulesetVersion, Character, Submission, Review, RuleDecision, Invite, Asset, AuditEvent
 from .rules import DEFAULT_CATALOG, SOURCE_HASH, calculate, roll_attribute
 
 
@@ -190,6 +191,30 @@ class ApiTests(TestCase):
         self.rules.label = 'Alterado'
         with self.assertRaises(ValueError):
             self.rules.save()
+
+    def test_audit_failure_rolls_back_each_character_mutation(self):
+        self.resolve()
+        submission_id = self.submit()
+        self.character.refresh_from_db()
+        revision = self.character.revision
+        operations = [
+            (self.player, 'post', '/api/characters', {'campaignId': self.campaign.pk, 'data': draft()}),
+            (self.player, 'patch', self.url, {'revision': revision, 'data': draft(name='Não deve persistir')}),
+            (self.player, 'patch', self.url + '/resources', {'pv': 1, 'pe': 2, 'san': 3}),
+            (self.player, 'post', self.url + '/submissions', {'revision': revision}),
+            (self.master, 'post', f'/api/submissions/{submission_id}/reviews', {'status': 'approved'}),
+            (self.master, 'post', f'/api/campaigns/{self.campaign.pk}/decisions',
+                {'ruleId': 'R08', 'value': {'eligibility': 'Não deve persistir'}, 'reason': 'Teste.'}),
+        ]
+        models = (Character, Submission, Review, RuleDecision, AuditEvent)
+        before = [list(model.objects.order_by('pk').values()) for model in models]
+        for user, method, url, data in operations:
+            with self.subTest(url=url, method=method):
+                self.client.force_login(user)
+                with patch('core.views.AuditEvent.objects.create', side_effect=RuntimeError('Falha sintética de auditoria')):
+                    with self.assertRaisesMessage(RuntimeError, 'Falha sintética de auditoria'):
+                        getattr(self.client, method)(url, data, format='json')
+                self.assertEqual([list(model.objects.order_by('pk').values()) for model in models], before)
 
     def test_csrf_is_enforced_before_login_and_registration(self):
         client = Client(enforce_csrf_checks=True)

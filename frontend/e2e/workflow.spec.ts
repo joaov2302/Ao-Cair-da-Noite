@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import fs from 'node:fs/promises';
+import path from 'node:path';
+const artifacts = process.env.ACDN_ARTIFACT_DIR!;
 
 async function register(page:Page, username:string) {
   await page.goto('/');
@@ -23,9 +25,9 @@ test('jogador cria, salva, recebe ajustes e aprovação de snapshot, exporta e i
   const master = await masterContext.newPage(); const player = await playerContext.newPage();
   for(const p of [master,player]) p.on('pageerror',e=>errors.push(e.message));
   const suffix=Date.now().toString();
-  await fs.mkdir('../docs/qa',{recursive:true});
+  await fs.mkdir(artifacts,{recursive:true});
   await master.goto('/');
-  await master.screenshot({path:'../docs/qa/acesso-desktop.png',fullPage:true});
+  await master.screenshot({path:path.join(artifacts,'acesso-desktop.png'),fullPage:true});
   await register(master,'mestre-'+suffix);
   await master.getByLabel('Nova campanha').fill('Mesa de teste '+suffix);
   await master.getByRole('button',{name:'Criar como mestre'}).click();
@@ -62,7 +64,7 @@ test('jogador cria, salva, recebe ajustes e aprovação de snapshot, exporta e i
   await expect(player.getByRole('status').filter({hasText:'Recursos atuais salvos'})).toBeVisible();
   await player.getByRole('button',{name:'Comparar arquétipos'}).click();
   await expect(player.locator('.archetype-card')).toHaveCount(4);
-  await player.screenshot({path:'../docs/qa/comparacao-desktop.png',fullPage:true});
+  await player.screenshot({path:path.join(artifacts,'comparacao-desktop.png'),fullPage:true});
   await player.getByLabel('Vigor',{exact:true}).fill('2');
   await expect(player.locator('.archetype-card').first().locator('.resources')).toContainText('22');
   await player.getByRole('button',{name:'Meu caderno',exact:true}).click();
@@ -123,11 +125,11 @@ test('jogador cria, salva, recebe ajustes e aprovação de snapshot, exporta e i
   expect(exported.approved).toBe(true);expect(exported.resourceState.pv).toBe(7);expect(exported.validation.maxima.pv).toBe(21);
   await player.emulateMedia({media:'print'});
   await expect(player.locator('.print-sheet')).toBeVisible();
-  await player.pdf({path:'../test-results/impressao.pdf',format:'A4'});
+  await player.pdf({path:path.join(artifacts,'impressao.pdf'),format:'A4'});
   await player.emulateMedia({media:'screen'});
   await player.setViewportSize({width:360,height:800});
   await step(player,'Atributos');
-  await player.screenshot({path:'../docs/qa/ficha-mobile.png',fullPage:true});
+  await player.screenshot({path:path.join(artifacts,'ficha-mobile.png'),fullPage:true});
   expect(await player.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   await player.getByLabel('Força',{exact:true}).focus();
   await expect(player.getByLabel('Força',{exact:true})).toBeFocused();
