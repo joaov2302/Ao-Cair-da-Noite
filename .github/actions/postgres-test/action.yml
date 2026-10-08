@@ -1,0 +1,26 @@
+name: PostgreSQL exclusivo de testes
+description: Cria um container efêmero com senha aleatória, sem segredos no YAML.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        python - <<'PY'
+        import os, secrets, subprocess, time
+        password = secrets.token_urlsafe(36)
+        print('::add-mask::' + password)
+        with open(os.environ['GITHUB_ENV'], 'a') as output:
+            output.write('POSTGRES_PASSWORD=' + password + '\n')
+        subprocess.run(['docker', 'run', '--detach', '--name', 'acdn-postgres-test',
+            '--publish', '127.0.0.1:55432:5432', '--env', 'POSTGRES_PASSWORD',
+            '--env', 'POSTGRES_USER=acdn_test', '--env', 'POSTGRES_DB=postgres', 'postgres:17'],
+            env={**os.environ, 'POSTGRES_PASSWORD': password}, check=True)
+        for attempt in range(30):
+            ready = subprocess.run(['docker', 'exec', 'acdn-postgres-test',
+                'pg_isready', '-h', '127.0.0.1', '-U', 'acdn_test', '-d', 'postgres'], capture_output=True)
+            if ready.returncode == 0:
+                break
+            time.sleep(1)
+        else:
+            raise SystemExit('PostgreSQL não ficou saudável.')
+        PY

@@ -1,5 +1,45 @@
 # Execução em 08/10/2026
 
+## Continuação — prompt 01 revisado e executado
+
+Rodada local concluída em 08/10/2026: PostgreSQL real, concorrência e percurso E2E isolados validados. CI preparado para PostgreSQL nos dois jobs relevantes; execução remota pendente. As seções abaixo desta continuação registram a entrega inicial e seus resultados históricos, que não são a evidência desta rodada.
+
+**Diagnóstico:** reaproveitados React/TypeScript/Vite, Django/DRF, modelos, migração inicial e percurso existente. Branch `Dev`, raiz Git confirmada, checkout limpo no início e nenhuma instrução `AGENTS.md`/`CLAUDE.md` encontrada no escopo aplicável. O prompt foi revisado contra código, índice de telas, diferenças, backlog, critérios de aceite, modelo e notas de salvamento/permissões/API/revisão. Nenhum bootstrap ou catálogo novo.
+
+**Correções:** cadastro duplicado simultâneo recebe 400 controlado; criação de ficha/auditoria passa a ser atômica; mutações usam ordem campanha → ficha, compartilhada com decisões globais e individuais. Aprovação conserva revisão e conjunto exato de decisões, com 409 quando obsoletos; decisão posterior invalida a aprovação derivada e mantém o histórico. Testes novos verificam as disputas e rollback das seis mutações. Não foi necessária migration.
+
+**Isolamento:** runtime portátil PostgreSQL 17.11 em `.local-test/`, somente `127.0.0.1:55432`, usuário `acdn_test`, senha aleatória sem exposição. Cada rodada gera outro banco. E2E em 8011/5175, sem reutilização de servidores, com dados sintéticos e artefatos ignorados pelo Git. Instalação do frontend foi reproduzida em cópia própria. O Compose de aplicação permanece separado. [Procedimentos, estratégia e CI](testing.md).
+
+| Comando/verificação desta rodada | Resultado novo |
+| --- | --- |
+| `pip install -r backend/requirements.txt`; `pip check` | Dependências satisfeitas; sem incompatibilidades. Python 3.13.14. |
+| `postgres-local.py start` | PostgreSQL 17.11 iniciado no cluster próprio; Docker local indisponível. |
+| `test_env.py api` | `check` sem erros, migrations sem drift e aplicadas em base nova; vendor PostgreSQL, usuário/porta/base identificados. **26 testes passaram**, incluindo sete de concorrência real e rollback de auditoria. |
+| Django em SQLite temporário | 19 passaram; sete concorrentes pulados explicitamente. Nenhuma evidência de PostgreSQL extraída desse resultado. |
+| `frontend-checks.py --e2e` | `npm ci` em cópia nova; zero vulnerabilidades reportadas nessa instalação; build TypeScript/Vite e **2 testes Vitest** passaram. |
+| Playwright no PostgreSQL | **2 testes passaram**: mestre/jogador, convite, salvar/retomar, comparação, recursos, ajustes, decisões sintéticas, novo envio, aprovação, JSON, impressão e invalidação após edição; erro de rede/conflito conserva edição local. |
+| Isolamento negativo | API preexistente em 8011 recusada; Playwright direto sem settings/banco exclusivo recusado. |
+| QA visual | Captura móvel de 360 px inspecionada; sem overflow no teste, foco conferido. Impressão A4 de duas páginas renderizada e inspecionada; conteúdo legível, decisões na segunda página. Não substitui auditoria completa de acessibilidade/impressão com textos longos. |
+| Git/configuração | Diff sem erros de whitespace; YAMLs de workflow/ação/Compose parseados. Sem commit, push ou deploy. |
+
+Evidência principal: `test-results/acdn_api_323ec5543164/checks.log` (26 testes, 25,289 s), `test-results/acdn_e2e_5712b869409f/checks.log` (2 E2E, 24,0 s), `test-results/frontend-3ca83f3b4f82/checks.log` e `test-results/isolation.log`. Capturas e impressão/renderizações ficam na pasta E2E. A primeira rodada intermediária passou 25 testes em `acdn_api_3f6682c2eb4f`, antes da inclusão do teste de rollback. Uma base E2E adicional vazia foi criada no ensaio de porta ocupada; não executou o percurso.
+
+**Preservação:** nenhum reset, remoção de volume, conversão/migration do SQLite da mesa ou importação de livro/imagens. O hash do SQLite mudou na leitura inicial: o servidor existente registrou PATCHs às 16:48, antes do E2E PostgreSQL às 16:57. Portanto não se declara imutabilidade do arquivo durante atividade do usuário. Após essa atividade, o hash `250d55984a66066758d7fcedb95a42adbb464f2c9c36a8890089c3aafe16c358` permaneceu igual nas verificações finais. O servidor da mesa respondeu 200 em 8000/5173 ao final dos testes. Uma tentativa inicial de `npm ci` na pasta principal encontrou um binário em uso; dependências foram repostas a partir da instalação isolada sem encerrar os processos da mesa. Builds/capturas antigos de QA foram preservados.
+
+**Fontes e regras:** preservadas as decisões anteriores, inclusive atributo zero, e a referência de hash já registrada no código. Não houve ativação de conteúdo, nova extração do Word nem confirmação de R03/R06/R08/R09 pela mesa; valores usados nos testes são sintéticos. B01/B05/B06 e decisões humanas conservam suas pendências anteriores.
+
+Encerramento: PostgreSQL portátil parado com `postgres-local.py stop`, dados/logs de teste mantidos. O hash final do SQLite continuou igual ao valor acima. O runner também recusou host não local antes de conectar/criar banco; a configuração final do Playwright listou os dois testes com os caminhos fornecidos pelo runner.
+
+| Backlog/gate | Estado desta rodada |
+| --- | --- |
+| B03 | Instalação/build/checks locais e PostgreSQL comprovados; CI remoto pendente. |
+| B04 | Permissões anteriores mantidas; convite concorrente e cadastro duplicado comprovados. |
+| B07/B11 — recorte técnico | Revisão/conflito/envio/parecer e decisão versus aprovação comprovados com conexões reais. Não implementa painel/revisão por campo de etapas futuras. |
+| Base B13 | Automação local passou; piloto real e auditoria ampliada continuam pendentes. |
+| B14 | Não executado; sem publicação ou ensaio de restauração. |
+
+Critérios do prompt 01: ambiente PostgreSQL separado, testes concorrentes, regressão do percurso, documentação/evidência atual e preservação dos dados/arquivos atendidos no recorte local. CI declara e configura PostgreSQL nos jobs API/E2E, mas o gate remoto não foi comprovado. Próximo passo técnico: revisar o diff, autorizar commit/push e executar `Checks`; a etapa 02 não foi iniciada.
+
 ## Resultado
 
 Primeiro percurso vertical implementado e verificado: conta → campanha/convite → criação de nível 1 → rascunho persistido → snapshot → ajustes do mestre → novo envio → aprovação → exportação JSON e impressão. Comparação dos quatro arquétipos usa entradas iguais e não altera a ficha do jogador.
@@ -48,7 +88,7 @@ Foram corrigidos durante a validação: rejeição de campos desconhecidos sem e
 
 ## Limitações materiais
 
-- SQLite foi o banco realmente usado nesta máquina. O Docker não estava ativo; PostgreSQL está configurado no compose/CI, sem validação local ou remota nesta execução. Controle de revisão foi testado sequencialmente; concorrência real deve ser verificada em PostgreSQL.
+- Na entrega inicial, SQLite foi o banco usado e concorrência foi testada sequencialmente. Essa limitação local foi superada pela rodada 01 descrita no início deste documento; Docker e CI remoto continuam sem execução comprovada.
 - Recursos são os máximos iniciais antes de benefícios raciais; raça, técnicas, perícias e inventário são registros manuais. Registrar uma decisão libera revisão, mas não implementa bônus ou efeitos automáticos. Defesa, deslocamento, avanço de nível, importação e vantagem/desvantagem não foram automatizados.
 - Validações individuais de raça/técnicas aplicam-se somente à revisão conferida. Editar exige nova validação; mudanças em decisões da campanha também invalidam aprovação anterior.
 - Não foram publicados dados reais dos personagens nem imagens privadas. As contas, campanhas e decisões utilizadas no Playwright são sintéticas e permanecem apenas no banco local ignorado pelo Git.
