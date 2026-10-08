@@ -1,0 +1,44 @@
+name: Checks
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: {POSTGRES_DB: acdn, POSTGRES_USER: acdn, POSTGRES_PASSWORD: ci-only-password}
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env: {POSTGRES_DB: acdn, POSTGRES_USER: acdn, POSTGRES_PASSWORD: ci-only-password}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.13'}
+      - run: pip install -r backend/requirements.txt
+      - run: python backend/manage.py makemigrations --check --dry-run
+      - run: python backend/manage.py test core
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run: {working-directory: frontend}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24', cache: npm, cache-dependency-path: frontend/package-lock.json}
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.13'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - run: python -m venv .venv
+      - run: .venv/bin/python -m pip install -r backend/requirements.txt
+      - run: .venv/bin/python backend/manage.py migrate
+      - run: npm ci --prefix frontend
+      - run: npx --prefix frontend playwright install --with-deps chromium
+      - run: npm run test:e2e --prefix frontend
